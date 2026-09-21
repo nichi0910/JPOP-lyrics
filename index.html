@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>尼吉的カラオケ</title>
+
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg:#f4f4f6; --panel:#fff; --panel-soft:#efeff2; --text:#161616;
+  --muted:#92929a; --line:#dedee4; --accent:#b88b42; --topbar:#e9e9ec;
+}
+body.dark {
+  --bg:#111214; --panel:#18191d; --panel-soft:#24252a; --text:#f5f5f6;
+  --muted:#92939b; --line:#303138; --accent:#d5aa64; --topbar:#1f2024;
+}
+html,body { margin:0; min-height:100%; background:var(--bg); color:var(--text);
+  font-family:Arial,"Noto Sans TC","Noto Sans JP",sans-serif; }
+button { font:inherit; }
+.top-area { padding:10px 16px; border-bottom:1px solid var(--line); }
+.topbar { display:grid; grid-template-columns:54px 1fr 72px; gap:8px; align-items:center; }
+.pill { min-height:50px; border:0; border-radius:26px; background:var(--topbar); color:var(--text); }
+#homeButton,#prevSong,#nextSong,#themeButton { cursor:pointer; }
+#homeButton { font-size:22px; }
+.switcher { display:grid; grid-template-columns:52px 1fr 52px; align-items:center; overflow:hidden; }
+.switcher button { height:50px; border:0; background:transparent; color:inherit; font-size:28px; }
+#topSongTitle { text-align:center; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 10px; }
+#themeButton { font-size:13px; font-weight:700; }
+
+.song-list-page { max-width:980px; margin:auto; padding:50px 24px 80px; }
+.page-title { font-size:54px; margin:0 0 34px; }
+.song-card { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:22px 6px;
+  border-bottom:1px solid var(--line); cursor:pointer; }
+.song-name { font-size:24px; font-weight:800; }
+.artist-name { margin-top:7px; color:var(--muted); font-size:14px; }
+.arrow { font-size:24px; }
+
+.player-page { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(340px,1fr);
+  height:calc(100vh - 71px); min-height:600px; overflow:hidden; }
+.media-pane { min-width:0; padding:52px 42px 28px; overflow:auto; }
+.video-wrap { width:min(100%,980px); margin:auto; }
+.video { width:100%; aspect-ratio:16/9; background:#000; border-radius:14px; overflow:hidden; }
+#player,#player iframe { width:100%; height:100%; }
+.video-meta,.helper-note { width:min(100%,980px); margin:10px auto 0; color:var(--muted); font-size:13px; }
+.helper-note { text-align:center; }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#4fc7bb; margin-right:7px; }
+
+.lyrics-pane { min-width:0; display:flex; flex-direction:column; overflow:hidden; background:var(--panel); border-left:1px solid var(--line); }
+.lyrics-scroll { flex:1; overflow-y:auto; padding:66px 28px 100px 24px; scroll-behavior:smooth; }
+.lyric-line { position:relative; padding:18px 20px 18px 28px; margin-bottom:10px; border-radius:14px;
+  color:var(--muted); opacity:.55; cursor:pointer; transition:.2s; }
+.lyric-line::before { content:""; position:absolute; left:0; top:4px; bottom:4px; width:3px; border-radius:3px; background:transparent; }
+.lyric-line:hover { opacity:.82; background:var(--panel-soft); }
+.lyric-line.active { opacity:1; color:var(--text); background:var(--panel-soft); transform:translateX(2px); }
+.lyric-line.active::before { background:var(--accent); }
+.lyric-text { font-size:18px; line-height:1.65; font-weight:700; }
+.lyrics-status { padding:10px 18px 14px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+
+.timing-tools { position:fixed; left:18px; bottom:18px; z-index:99; width:min(430px,calc(100vw - 36px));
+  padding:16px; border:1px solid var(--line); border-radius:16px; background:var(--panel);
+  box-shadow:0 10px 35px rgba(0,0,0,.18); }
+.timing-tools[hidden] { display:none; }
+.timing-title { font-weight:800; margin-bottom:7px; }
+.timing-status { color:var(--muted); font-size:13px; margin-bottom:9px; }
+.timing-next { padding:10px 12px; border-radius:10px; background:var(--panel-soft); margin-bottom:10px; font-size:14px; }
+.timing-actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.timing-actions button { border:1px solid var(--line); border-radius:10px; padding:9px 12px; background:var(--panel); color:var(--text); cursor:pointer; }
+.timing-actions .primary { background:var(--text); color:var(--panel); }
+#timesOutput { width:100%; min-height:88px; border:1px solid var(--line); border-radius:10px; padding:10px;
+  background:var(--panel); color:var(--text); font-family:Consolas,monospace; font-size:12px; }
+
+@media (max-width:900px) {
+  .topbar { grid-template-columns:48px 1fr 58px; }
+  .switcher { grid-template-columns:44px 1fr 44px; }
+  .player-page { display:block; height:auto; min-height:0; overflow:visible; }
+  .media-pane { padding:24px 14px 18px; overflow:visible; }
+  .lyrics-pane { border-left:0; border-top:1px solid var(--line); }
+  .lyrics-scroll { overflow:visible; padding:24px 14px 70px; }
+}
+
+.lyrics-source {
+    width: min(100%, 980px);
+    margin: 4px auto 0;
+
+    color: var(--muted);
+
+    font-size: 11px;
+    line-height: 1.5;
+
+    text-align: left;
+}
+
+/* =========================
+   演唱者 ICON
+========================= */
+
+.singer-icons {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.singer-icon {
+    display: inline-block;
+
+    width: 16px;
+    height: 16px;
+
+    flex-shrink: 0;
+
+    background-color: currentColor;
+
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+}
+
+.lyric-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.lyric-text {
+    min-width: 0;
+}
+
+
+/* 狗掌：淺紫 */
+.singer-dog {
+    color: #D1BCF4;
+
+    mask-image: url("./icons/pets.png");
+    -webkit-mask-image: url("./icons/pets.png");
+}
+
+
+/* 橡實：咖啡 */
+.singer-squirrel {
+    color: #8B5E3C;
+
+    mask-image: url("./icons/acorn.png");
+    -webkit-mask-image: url("./icons/acorn.png");
+}
+
+
+/* 橘子：橘 */
+.singer-orange {
+    color: #FF8500;
+
+    mask-image: url("./icons/orange.png");
+    -webkit-mask-image: url("./icons/orange.png");
+}
+
+</style>
+
+
+</head>
+<body>
+<div class="top-area">
+  <div class="topbar">
+    <button id="homeButton" class="pill" type="button">←</button>
+    <div class="switcher pill">
+      <button id="prevSong" type="button">‹</button>
+      <div id="topSongTitle">SONGS</div>
+      <button id="nextSong" type="button">›</button>
+    </div>
+    <button id="themeButton" class="pill" type="button">深色</button>
+  </div>
+</div>
+
+<main id="app"></main>
+
+<script>
+const songs = [
+
+        {
+            id: "song-c1",
+
+            title: "棉花糖-馬戲團公約【COVER】",
+
+            artist: "厭世醫師阿萬",
+
+            youtubeId: "2nxg9hmf9fE",
+
+times: [
+    7.09,
+    10.39,
+    13.6,
+    20.18,
+    23.38,
+    26.65,
+    33.13,
+    39.92,
+    46.09,
+    52.84,
+    67.07,
+    70.32,
+    73.48,
+    75.8,
+    80.12,
+    83.25,
+    86.5,
+    93.14,
+    99.98,
+    106.12,
+    112.87,
+    119,
+    145.2,
+    148,
+    151.76,
+    157.94,
+    164.89
+],
+
+singers: [
+    ["orange"],
+    ["orange"],
+    ["orange"],
+    ["dog"],
+    ["dog"],
+    ["dog"],
+    ["dog"],
+    ["dog"],
+    ["orange"],
+    ["orange"],
+    ["squirrel"],
+    ["squirrel"],
+    ["squirrel"],
+    ["dog", "squirrel", "orange"],
+    ["dog"],
+    ["dog"],
+    ["orange"],
+    ["squirrel"],
+    ["squirrel"],
+    ["dog"],
+    ["orange"],
+    ["dog", "squirrel", "orange"],
+    ["orange"],
+    ["dog"],
+    ["squirrel"],
+    ["orange"],
+    ["dog", "squirrel", "orange"],
+
+],
+
+
+            lyrics: `
+    
+    跟著月光 冒險要出發
+    螞蟻大象 是無形的框
+    越貪婪成長 越凌亂越迷惘
+
+    母雞與蛋 哪個 先登場
+    既然無解 那就 算了吧
+    越偏執 答案 越推翻 越失望
+
+    馬戲團公約 入場卷是熱血 快樂是甜點 悲傷是資源
+    卸下疲憊 孤獨瓦解 小丑面具下的臉
+
+    馬戲團公約 我們盡情表演 勇氣是宵夜 慾望是能源
+    每一次的考驗 跳過火圈 又是新的一天 啦啦啦
+
+    帳篷裡面 鋒芒 太耀眼
+    獅子老虎 聲勢 誰領先
+    越渴望 目光 
+    越蔓延 越浮誇
+
+    偶爾出現 失序 的場面
+    一切OK 進化 成經驗
+    越迷戀 完美 越迫切 越危險
+
+    馬戲團公約 入場卷是熱血 快樂是甜點 悲傷是資源
+    卸下疲憊 孤獨瓦解 小丑面具下的臉
+
+    馬戲團公約 我們盡情表演 勇氣是宵夜 慾望是能源
+    每一次的考驗 跳過火圈 又是新的一天 
+    啦啦啦
+
+    馬戲團公約 劇本由你來寫 
+    燈光是點綴 音樂是調味
+    手牽著手 管他是誰 遊樂每一個瞬間
+
+    馬戲團公約 有效期限永遠 未來是無限 自信是配備
+    畫上一個笑臉 悲傷再見 又是新的一天 啦啦啦
+    `
+        }
+
+    ];
+
+const app = document.getElementById("app");
+const topSongTitle = document.getElementById("topSongTitle");
+const prevSongButton = document.getElementById("prevSong");
+const nextSongButton = document.getElementById("nextSong");
+const themeButton = document.getElementById("themeButton");
+const homeButton = document.getElementById("homeButton");
+
+let player = null;
+let pendingSong = null;
+let currentSong = null;
+let lyricTimer = null;
+let currentActiveIndex = -1;
+
+let timingMode = false;
+let timingIndex = 0;
+let recordedTimes = [];
+let timingKeyHandler = null;
+
+const isEditMode = new URLSearchParams(location.search).get("edit") === "1";
+
+function lyricLinesOf(song) {
+  return song.lyrics.trim().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+
+function savedTimesKey(song) {
+  return "jpop-lyrics-times:" + song.id;
+}
+
+function getEffectiveTimes(song) {
+  const lines = lyricLinesOf(song);
+  try {
+    const saved = JSON.parse(localStorage.getItem(savedTimesKey(song)) || "null");
+    if (Array.isArray(saved) && saved.length === lines.length) return saved;
+  } catch (e) {}
+  if (Array.isArray(song.times) && song.times.length === lines.length) return song.times;
+  return [];
+}
+
+function escapeHTML(value) {
+  return String(value)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+function setTheme(mode) {
+  document.body.classList.toggle("dark", mode === "dark");
+  themeButton.textContent = mode === "dark" ? "淺色" : "深色";
+  localStorage.setItem("jpop-lyrics-theme", mode);
+}
+setTheme(localStorage.getItem("jpop-lyrics-theme") || "light");
+themeButton.addEventListener("click", () => setTheme(document.body.classList.contains("dark") ? "light" : "dark"));
+homeButton.addEventListener("click", () => location.hash = "/");
+
+function showSongList() {
+  cleanupPlayer();
+  topSongTitle.textContent = "SONGS";
+  prevSongButton.disabled = true;
+  nextSongButton.disabled = true;
+
+  let html = `<section class="song-list-page"><h1 class="page-title">SONGS</h1>`;
+  songs.forEach(song => {
+    html += `
+      <div class="song-card" data-id="${song.id}">
+        <div>
+          <div class="song-name">${escapeHTML(song.title)}</div>
+          <div class="artist-name">${escapeHTML(song.artist)}</div>
+        </div>
+        <div class="arrow">→</div>
+      </div>`;
+  });
+  html += `</section>`;
+  app.innerHTML = html;
+  app.querySelectorAll(".song-card").forEach(card => {
+    card.addEventListener("click", () => location.hash = "/song/" + card.dataset.id);
+  });
+}
+
+function showSong(id) {
+  const song = songs.find(s => s.id === id);
+  if (!song) return showSongList();
+
+  currentSong = song;
+  currentActiveIndex = -1;
+  const lines = lyricLinesOf(song);
+  const times = getEffectiveTimes(song);
+
+  topSongTitle.textContent = song.title;
+  updateSongNavigation(song);
+
+  let lyricsHTML = "";
+  lines.forEach((line, index) => {
+
+    const time = times[index];
+
+    const singers =
+        song.singers?.[index] || [];
+
+
+    const singerHTML =
+        singers.map(singer => {
+
+            return `
+                <span
+                    class="singer-icon singer-${singer}">
+                </span>
+            `;
+
+        }).join("");
+
+
+lyricsHTML += `
+
+    <div
+        class="lyric-line"
+        data-index="${index}"
+        ${Number.isFinite(time) ? `data-time="${time}"` : ""}
+    >
+
+        <div class="singer-icons">
+            ${singerHTML}
+        </div>
+
+        <div class="lyric-text">
+            ${escapeHTML(line)}
+        </div>
+
+    </div>
+
+`;
+
+});
+
+  app.innerHTML = `
+    <section class="player-page">
+      <div class="media-pane">
+        <div class="video-wrap">
+          <div class="video"><div id="player"></div></div>
+        </div>
+        <div class="video-meta">
+            厭世醫師阿萬 Doctor R1 ch.
+            </div>
+        <div class="lyrics-source">
+            透過播放器原生播放按鈕開始的播放才會計入官方播放數
+            <br><br>
+            歌詞取自©KKBOX All Rights Reserved.
+            <br><br>
+            網頁參考原形Vaundy韓國應援網站
+        </div>
+      </div>
+
+      <aside class="lyrics-pane">
+        <div class="lyrics-scroll" id="lyricsScroll">${lyricsHTML}</div>
+        <div class="lyrics-status" id="lyricsStatus">
+          ${times.length === lines.length ? "同步歌詞已就緒" : "尚未校時：網址加 ?edit=1 可進入校時模式"}
+        </div>
+      </aside>
+    </section>
+
+    <section class="timing-tools" id="timingTools" ${isEditMode ? "" : "hidden"}>
+      <div class="timing-title">校時模式</div>
+      <div class="timing-status" id="timingStatus">尚未開始</div>
+      <div class="timing-next" id="timingNext">按開始校時後，播放 MV，再記錄每句開始時間。</div>
+      <div class="timing-actions">
+        <button class="primary" id="startTiming" type="button">開始校時</button>
+        <button id="stampTiming" type="button">記錄這句</button>
+        <button id="undoTiming" type="button">上一步</button>
+        <button id="resetTiming" type="button">全部重來</button>
+      </div>
+      <textarea id="timesOutput" readonly placeholder="完成後會產生 times: [ ... ]"></textarea>
+    </section>`;
+
+  bindLyricClicks();
+
+  if (window.YT && window.YT.Player) createPlayer(song);
+  else pendingSong = song;
+}
+
+function updateSongNavigation(song) {
+  const index = songs.findIndex(s => s.id === song.id);
+  const prev = songs[index - 1];
+  const next = songs[index + 1];
+  prevSongButton.disabled = !prev;
+  nextSongButton.disabled = !next;
+  prevSongButton.onclick = () => { if (prev) location.hash = "/song/" + prev.id; };
+  nextSongButton.onclick = () => { if (next) location.hash = "/song/" + next.id; };
+}
+
+function createPlayer(song) {
+  cleanupPlayer(false);
+  player = new YT.Player("player", {
+    videoId: song.youtubeId,
+    playerVars: { rel:0, playsinline:1 },
+    events: {
+      onReady: () => { setupTimingTool(song); startLyricSync(); },
+      onStateChange: () => startLyricSync()
+    }
+  });
+}
+
+function cleanupPlayer(destroy = true) {
+  if (lyricTimer) { clearInterval(lyricTimer); lyricTimer = null; }
+  if (timingKeyHandler) {
+    document.removeEventListener("keydown", timingKeyHandler);
+    timingKeyHandler = null;
+  }
+  if (destroy && player) {
+    try { player.destroy(); } catch (e) {}
+    player = null;
+  }
+}
+
+function startLyricSync() {
+  if (lyricTimer) clearInterval(lyricTimer);
+  lyricTimer = setInterval(() => {
+    if (!currentSong || !player || typeof player.getCurrentTime !== "function" || timingMode) return;
+    const times = getEffectiveTimes(currentSong);
+    const lines = lyricLinesOf(currentSong);
+    if (times.length !== lines.length) return;
+
+    const currentTime = player.getCurrentTime();
+
+    const displayOffset = 1.0; // 提前 1 秒顯示
+
+    const displayTime = currentTime + displayOffset;
+
+    let activeIndex = -1;
+
+    for (let i = 0; i < times.length; i++) {
+        if (displayTime >= times[i]) activeIndex = i;
+        else break;
+    }
+
+    if (activeIndex !== currentActiveIndex) {
+      setActiveLyric(activeIndex, true);
+      currentActiveIndex = activeIndex;
+    }
+  }, 250);
+}
+
+function setActiveLyric(index, shouldScroll) {
+  const nodes = [...document.querySelectorAll(".lyric-line")];
+  nodes.forEach((node, i) => node.classList.toggle("active", i === index));
+  if (index >= 0 && shouldScroll && nodes[index]) {
+    nodes[index].scrollIntoView({ behavior:"smooth", block:"center" });
+  }
+}
+
+function bindLyricClicks() {
+  document.querySelectorAll(".lyric-line").forEach(node => {
+    node.addEventListener("click", () => {
+      if (!player || typeof player.seekTo !== "function") return;
+      const time = Number(node.dataset.time);
+      if (!Number.isFinite(time)) return;
+      player.seekTo(time, true);
+      player.playVideo();
+    });
+  });
+}
+
+function refreshLyricTimeData(song) {
+  const times = getEffectiveTimes(song);
+  const nodes = [...document.querySelectorAll(".lyric-line")];
+  nodes.forEach((node, i) => {
+    if (Number.isFinite(times[i])) node.dataset.time = times[i];
+    else delete node.dataset.time;
+  });
+}
+
+function setupTimingTool(song) {
+  if (!isEditMode) return;
+
+  const lines = lyricLinesOf(song);
+  const startButton = document.getElementById("startTiming");
+  const stampButton = document.getElementById("stampTiming");
+  const undoButton = document.getElementById("undoTiming");
+  const resetButton = document.getElementById("resetTiming");
+  const status = document.getElementById("timingStatus");
+  const next = document.getElementById("timingNext");
+  const output = document.getElementById("timesOutput");
+
+  function refresh() {
+    status.textContent = timingMode ? `已記錄 ${timingIndex} / ${lines.length} 句`
+      : (recordedTimes.length ? `目前有 ${recordedTimes.length} 個時間點` : "尚未開始");
+    next.textContent = timingIndex < lines.length ? `下一句：${lines[timingIndex]}` : "完成！";
+    output.value = recordedTimes.length ? `times: [\n    ${recordedTimes.join(",\n    ")}\n],` : "";
+    if (timingIndex < lines.length) setActiveLyric(timingIndex, true);
+  }
+
+  function save() {
+    localStorage.setItem(savedTimesKey(song), JSON.stringify(recordedTimes));
+    refreshLyricTimeData(song);
+  }
+
+  function stamp() {
+    if (!timingMode || timingIndex >= lines.length || !player) return;
+    recordedTimes.push(Number(player.getCurrentTime().toFixed(2)));
+    timingIndex++;
+    save();
+    if (timingIndex >= lines.length) {
+      timingMode = false;
+      document.getElementById("lyricsStatus").textContent = "校時完成；現在即可同步播放";
+    }
+    refresh();
+  }
+
+  startButton.addEventListener("click", () => {
+    timingMode = true; timingIndex = 0; recordedTimes = []; save(); refresh();
+  });
+  stampButton.addEventListener("click", stamp);
+  undoButton.addEventListener("click", () => {
+    if (!recordedTimes.length) return;
+    recordedTimes.pop(); timingIndex = recordedTimes.length; timingMode = true; save(); refresh();
+  });
+  resetButton.addEventListener("click", () => {
+    timingMode = false; timingIndex = 0; recordedTimes = [];
+    localStorage.removeItem(savedTimesKey(song)); refreshLyricTimeData(song); refresh();
+  });
+
+  timingKeyHandler = event => {
+    if (!timingMode) return;
+    if (event.code === "Space" || event.code === "Enter") {
+      event.preventDefault();
+      stamp();
+    }
+  };
+  document.addEventListener("keydown", timingKeyHandler);
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(savedTimesKey(song)) || "[]");
+    recordedTimes = Array.isArray(saved) ? saved.slice() : [];
+  } catch (e) { recordedTimes = []; }
+  timingIndex = recordedTimes.length;
+  refresh();
+}
+
+function router() {
+  const hash = location.hash;
+  if (hash.startsWith("#/song/")) showSong(hash.replace("#/song/",""));
+  else showSongList();
+}
+
+window.addEventListener("hashchange", router);
+router();
+
+window.onYouTubeIframeAPIReady = function() {
+  if (pendingSong) {
+    const song = pendingSong;
+    pendingSong = null;
+    createPlayer(song);
+  }
+};
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
